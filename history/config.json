@@ -1,0 +1,8 @@
+{
+  "api_key": "sk-eb5a5ee6cf534efbb8e8d1d83999bb34",
+  "api_url": "https://api.deepseek.com/v1/chat/completions",
+  "model": "deepseek-chat",
+  "max_text_length": 5000,
+  "port": 5000,
+  "debug": false
+}

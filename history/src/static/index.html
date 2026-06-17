@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>公文校对助手</title>
+    <style>
+        /* ============================================
+           全局样式
+           ============================================ */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            font-size: 16px;
+            color: #333;
+            background: #F5F8FC;
+            min-width: 1024px;
+        }
+
+        /* ============================================
+           导航栏
+           ============================================ */
+        .navbar {
+            background: #4A90D9;
+            color: #fff;
+            padding: 14px 28px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 2px 8px rgba(74, 144, 217, 0.2);
+        }
+        .navbar .logo {
+            font-size: 22px;
+        }
+        .navbar h1 {
+            font-size: 20px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+        .navbar .subtitle {
+            font-size: 13px;
+            opacity: 0.85;
+            margin-left: 8px;
+        }
+
+        /* ============================================
+           主布局
+           ============================================ */
+        .main-container {
+            display: flex;
+            gap: 20px;
+            padding: 20px 28px;
+            height: calc(100vh - 180px);
+            min-height: 520px;
+        }
+
+        /* ============================================
+           左侧：文本输入区
+           ============================================ */
+        .input-panel {
+            flex: 0 0 62%;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .input-panel .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .input-panel .panel-title {
+            font-size: 15px;
+            font-weight: bold;
+            color: #555;
+        }
+        .input-panel .char-count {
+            font-size: 13px;
+            color: #999;
+        }
+        .input-panel .char-count.warn {
+            color: #E74C3C;
+            font-weight: bold;
+        }
+
+        textarea {
+            flex: 1;
+            width: 100%;
+            padding: 16px 20px;
+            font-family: "Microsoft YaHei", "宋体", SimSun, serif;
+            font-size: 16px;
+            line-height: 1.9;
+            color: #333;
+            background: #fff;
+            border: 1px solid #D0DCE8;
+            border-radius: 8px;
+            resize: none;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        textarea:focus {
+            border-color: #4A90D9;
+            box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.1);
+        }
+        textarea::placeholder {
+            color: #bbb;
+        }
+
+        /* 高亮预览区 */
+        .preview-box {
+            max-height: 200px;
+            padding: 14px 20px;
+            font-family: "Microsoft YaHei", "宋体", SimSun, serif;
+            font-size: 16px;
+            line-height: 1.9;
+            color: #333;
+            background: #fff;
+            border: 1px solid #D0DCE8;
+            border-radius: 8px;
+            overflow-y: auto;
+            display: none;
+        }
+        .preview-box.show {
+            display: block;
+        }
+        .preview-box .preview-title {
+            font-size: 13px;
+            color: #999;
+            margin-bottom: 8px;
+            font-family: "Microsoft YaHei", sans-serif;
+        }
+
+        /* 高亮样式 */
+        .highlight {
+            border-radius: 3px;
+            padding: 1px 0;
+            cursor: pointer;
+            position: relative;
+            transition: filter 0.15s;
+        }
+        .highlight:hover {
+            filter: brightness(0.92);
+        }
+        .highlight.typo {
+            background: #FFF3CD;
+            border-bottom: 2px wavy #E6A817;
+        }
+        .highlight.grammar {
+            background: #FFE8D6;
+            border-bottom: 2px wavy #E6883A;
+        }
+        .highlight.wording {
+            background: #FFE8D6;
+            border-bottom: 2px wavy #E6883A;
+        }
+        .highlight.punctuation {
+            background: #E8E0F0;
+            border-bottom: 2px wavy #8B5CF6;
+        }
+        .highlight.sensitive {
+            background: #FDE2E2;
+            border-bottom: 2px dashed #E74C3C;
+        }
+
+        /* 悬停提示框 */
+        .tooltip {
+            display: none;
+            position: absolute;
+            bottom: calc(100% + 10px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 12px 16px;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+            z-index: 100;
+            white-space: nowrap;
+            max-width: 360px;
+            text-align: left;
+            font-family: "Microsoft YaHei", sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: #fff;
+        }
+        .tooltip .tt-type {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 2px;
+        }
+        .tooltip .tt-reason {
+            color: #666;
+            margin-bottom: 6px;
+        }
+        .tooltip .tt-suggest {
+            color: #27AE60;
+            font-weight: bold;
+        }
+        .highlight:hover .tooltip {
+            display: block;
+        }
+
+        /* ============================================
+           右侧：结果面板
+           ============================================ */
+        .result-panel {
+            flex: 0 0 36%;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .result-panel .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .result-panel .panel-title {
+            font-size: 15px;
+            font-weight: bold;
+            color: #555;
+        }
+        .result-summary {
+            display: flex;
+            gap: 14px;
+            font-size: 13px;
+            color: #777;
+            flex-wrap: wrap;
+        }
+        .result-summary .tag {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .tag.typo { background: #FFF3CD; color: #B8860B; }
+        .tag.grammar { background: #FFE8D6; color: #C0551A; }
+        .tag.wording { background: #FFE8D6; color: #C0551A; }
+        .tag.punctuation { background: #E8E0F0; color: #6D28D9; }
+        .tag.sensitive { background: #FDE2E2; color: #C0392B; }
+
+        .issue-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .issue-card {
+            background: #fff;
+            border: 1px solid #e8e8e8;
+            border-radius: 8px;
+            padding: 12px 14px;
+            border-left: 4px solid #ccc;
+            cursor: pointer;
+            transition: box-shadow 0.15s;
+        }
+        .issue-card:hover {
+            box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+        }
+        .issue-card.typo { border-left-color: #F0C040; }
+        .issue-card.grammar { border-left-color: #E6883A; }
+        .issue-card.wording { border-left-color: #E6883A; }
+        .issue-card.punctuation { border-left-color: #8B5CF6; }
+        .issue-card.sensitive { border-left-color: #E74C3C; }
+
+        .issue-card .card-type {
+            font-size: 11px;
+            color: #999;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+        .issue-card .card-original {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 2px;
+        }
+        .issue-card .card-original .strikethrough {
+            text-decoration: line-through;
+            color: #C0392B;
+        }
+        .issue-card .card-replace {
+            font-size: 16px;
+            color: #27AE60;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        .issue-card .card-reason {
+            font-size: 13px;
+            color: #999;
+        }
+        .issue-card .card-actions {
+            margin-top: 8px;
+            display: flex;
+            gap: 8px;
+        }
+
+        /* ============================================
+           按钮
+           ============================================ */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 22px;
+            font-size: 15px;
+            font-family: "Microsoft YaHei", sans-serif;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-weight: 500;
+        }
+        .btn:active {
+            transform: scale(0.97);
+        }
+        .btn-primary {
+            background: #4A90D9;
+            color: #fff;
+        }
+        .btn-primary:hover {
+            background: #357ABD;
+        }
+        .btn-success {
+            background: #5CB85C;
+            color: #fff;
+        }
+        .btn-success:hover {
+            background: #4A9A4A;
+        }
+        .btn-outline {
+            background: #fff;
+            color: #4A90D9;
+            border: 1px solid #4A90D9;
+        }
+        .btn-outline:hover {
+            background: #F0F6FC;
+        }
+        .btn-sm {
+            padding: 5px 14px;
+            font-size: 13px;
+        }
+        .btn-xs {
+            padding: 3px 10px;
+            font-size: 12px;
+            border-radius: 4px;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* ============================================
+           底部工具栏
+           ============================================ */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0 28px 16px;
+            flex-wrap: wrap;
+        }
+        .toolbar .divider {
+            width: 1px;
+            height: 24px;
+            background: #D0DCE8;
+            margin: 0 4px;
+        }
+        .toolbar .feedback-text {
+            font-size: 13px;
+            color: #999;
+        }
+        .btn-feedback {
+            font-size: 18px;
+            padding: 6px 12px;
+            border-radius: 20px;
+        }
+
+        /* ============================================
+           状态提示
+           ============================================ */
+        .status-bar {
+            padding: 8px 28px;
+            font-size: 13px;
+            color: #999;
+            text-align: center;
+        }
+        .status-bar .status-msg {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 12px;
+        }
+        .status-msg.info {
+            background: #E3F2FD;
+            color: #4A90D9;
+        }
+        .status-msg.success {
+            background: #E8F5E9;
+            color: #27AE60;
+        }
+        .status-msg.error {
+            background: #FDEDEC;
+            color: #E74C3C;
+        }
+        .status-msg.loading {
+            background: #FFF8E1;
+            color: #F39C12;
+        }
+
+        /* ============================================
+           滚动条美化
+           ============================================ */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <span class="logo">🔍</span>
+        <h1>公文校对助手</h1>
+        <span class="subtitle">错敏词识别 · 一键校对</span>
+    </nav>
+
+    <!-- 主内容区 -->
+    <div class="main-container">
+        <!-- 左侧：文本输入 -->
+        <div class="input-panel">
+            <div class="panel-header">
+                <span class="panel-title">📝 文本输入</span>
+                <span class="char-count" id="charCount">0 / 5000</span>
+            </div>
+            <textarea
+                id="textInput"
+                placeholder="在此粘贴待校对的公文、新闻稿或其它文本内容……&#10;&#10;粘贴后点击下方「一键校对」按钮即可开始检查。"
+                maxlength="5000"
+            ></textarea>
+            <!-- 高亮预览 -->
+            <div class="preview-box" id="previewBox">
+                <div class="preview-title">🔍 校对预览（悬停高亮文字可查看建议）</div>
+                <div id="previewContent"></div>
+            </div>
+        </div>
+
+        <!-- 右侧：校对结果 -->
+        <div class="result-panel">
+            <div class="panel-header">
+                <span class="panel-title">📋 校对结果</span>
+            </div>
+            <div class="result-summary" id="resultSummary">
+                <span style="color:#999;">等待校对...</span>
+            </div>
+            <div class="issue-list" id="issueList">
+                <div style="text-align:center; color:#ccc; padding:40px 0;">
+                    <div style="font-size:48px; margin-bottom:12px;">📎</div>
+                    <div>点击「一键校对」开始检查</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部工具栏 -->
+    <div class="toolbar">
+        <button class="btn btn-primary" id="btnCheck" onclick="doCheck()">
+            🔍 一键校对
+        </button>
+        <button class="btn btn-success" id="btnAcceptAll" onclick="acceptAll()" disabled>
+            ✅ 全部修正
+        </button>
+        <button class="btn btn-outline" id="btnUndo" onclick="undo()" disabled>
+            ↩ 撤销
+        </button>
+
+        <span class="divider"></span>
+
+        <span class="feedback-text">校对结果如何？</span>
+        <button class="btn btn-outline btn-feedback" onclick="sendFeedback('good')" title="好用">👍</button>
+        <button class="btn btn-outline btn-feedback" onclick="sendFeedback('bad')" title="不好用">👎</button>
+    </div>
+
+    <!-- 状态栏 -->
+    <div class="status-bar" id="statusBar">
+        <span class="status-msg info">就绪 — 粘贴文本后点击「一键校对」</span>
+    </div>
+
+    <script>
+        // ============================================
+        // 全局状态
+        // ============================================
+        let currentIssues = [];
+        let originalText = '';
+        let lastTextBeforeAccept = '';  // 用于撤销
+
+        // ============================================
+        // 字数统计
+        // ============================================
+        const textInput = document.getElementById('textInput');
+        const charCount = document.getElementById('charCount');
+
+        textInput.addEventListener('input', () => {
+            const len = textInput.value.length;
+            charCount.textContent = `${len} / 5000`;
+            charCount.className = len > 4500 ? 'char-count warn' : 'char-count';
+            // 用户修改文本后清空上次结果
+            if (textInput.value !== originalText && currentIssues.length > 0) {
+                clearResults();
+            }
+        });
+
+        // ============================================
+        // 一键校对
+        // ============================================
+        async function doCheck() {
+            const text = textInput.value.trim();
+            if (!text) {
+                setStatus('请先粘贴待校对的文本', 'error');
+                return;
+            }
+
+            originalText = text;
+            setStatus('⏳ 正在校对中，请稍候...', 'loading');
+            document.getElementById('btnCheck').disabled = true;
+            document.getElementById('btnAcceptAll').disabled = true;
+            document.getElementById('btnUndo').disabled = true;
+
+            try {
+                const resp = await fetch('/api/check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text }),
+                });
+
+                const data = await resp.json();
+
+                if (!data.success) {
+                    setStatus(`校对失败：${data.error}`, 'error');
+                    document.getElementById('btnCheck').disabled = false;
+                    return;
+                }
+
+                currentIssues = data.issues;
+
+                // 渲染结果
+                renderPreview(data.issues);
+                renderIssueList(data.issues);
+                renderSummary(data.summary);
+
+                if (data.ai_error) {
+                    setStatus(`⚠️ AI 服务暂不可用（${data.ai_error}），仅显示了本地敏感词匹配结果`, 'error');
+                } else if (data.issues.length === 0) {
+                    setStatus('✅ 未发现问题，文本看起来很不错！', 'success');
+                } else {
+                    setStatus(`✅ 校对完成，共发现 ${data.summary.total} 处问题`, 'success');
+                }
+
+                document.getElementById('btnAcceptAll').disabled = data.issues.length === 0;
+            } catch (err) {
+                setStatus(`网络错误：${err.message}，请确认后端服务已启动`, 'error');
+            }
+
+            document.getElementById('btnCheck').disabled = false;
+        }
+
+        // ============================================
+        // 渲染高亮预览
+        // ============================================
+        function renderPreview(issues) {
+            const text = textInput.value;
+            const previewBox = document.getElementById('previewBox');
+            const previewContent = document.getElementById('previewContent');
+
+            if (issues.length === 0) {
+                previewBox.classList.remove('show');
+                return;
+            }
+
+            // 按位置排序，从后往前插入高亮标签（避免位置偏移）
+            const sorted = [...issues].sort((a, b) => a.position.start - b.position.start);
+
+            let html = '';
+            let cursor = 0;
+
+            for (const issue of sorted) {
+                const start = issue.position.start;
+                const end = issue.position.end;
+
+                // 前面的正常文字（转义 HTML）
+                html += escapeHtml(text.slice(cursor, start));
+
+                // 高亮文字
+                const typeLabel = {
+                    typo: '错别字',
+                    grammar: '语病',
+                    wording: '用词不当',
+                    punctuation: '标点错误',
+                    sensitive: '敏感词'
+                }[issue.type] || issue.type;
+
+                html += `<span class="highlight ${issue.type}">`;
+                html += escapeHtml(text.slice(start, end));
+                html += `<span class="tooltip">`;
+                html += `<div class="tt-type">[${typeLabel}]</div>`;
+                html += `<div class="tt-reason">${escapeHtml(issue.reason)}</div>`;
+                if (issue.replace_with) {
+                    html += `<div class="tt-suggest">建议改为：${escapeHtml(issue.replace_with)}</div>`;
+                }
+                html += `</span></span>`;
+
+                cursor = end;
+            }
+
+            // 剩余正常文字
+            html += escapeHtml(text.slice(cursor));
+
+            previewContent.innerHTML = html;
+            previewBox.classList.add('show');
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        // ============================================
+        // 渲染右侧问题列表
+        // ============================================
+        function renderIssueList(issues) {
+            const list = document.getElementById('issueList');
+
+            if (issues.length === 0) {
+                list.innerHTML = `
+                    <div style="text-align:center; color:#27AE60; padding:40px 0;">
+                        <div style="font-size:48px; margin-bottom:12px;">✅</div>
+                        <div>未发现问题</div>
+                    </div>`;
+                return;
+            }
+
+            const typeLabel = {
+                typo: '错别字',
+                grammar: '语病',
+                wording: '用词不当',
+                punctuation: '标点错误',
+                sensitive: '敏感词'
+            };
+
+            list.innerHTML = issues.map(issue => `
+                <div class="issue-card ${issue.type}" onclick="scrollToHighlight(${issue.id})">
+                    <div class="card-type">[${typeLabel[issue.type] || issue.type}] #${issue.id}</div>
+                    <div class="card-original">
+                        <span class="strikethrough">${escapeHtml(issue.original)}</span>
+                    </div>
+                    ${issue.replace_with ? `<div class="card-replace">→ ${escapeHtml(issue.replace_with)}</div>` : ''}
+                    <div class="card-reason">${escapeHtml(issue.reason)}</div>
+                    ${issue.replace_with ? `
+                        <div class="card-actions">
+                            <button class="btn btn-success btn-xs" onclick="event.stopPropagation(); acceptIssue(${issue.id})">
+                                ✅ 采纳
+                            </button>
+                        </div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        // ============================================
+        // 渲染统计摘要
+        // ============================================
+        function renderSummary(summary) {
+            const el = document.getElementById('resultSummary');
+            const parts = [`<span style="font-weight:bold;">共 ${summary.total} 处问题</span>`];
+            if (summary.typo > 0) parts.push(`<span class="tag typo">错别字 ${summary.typo}</span>`);
+            if (summary.grammar > 0) parts.push(`<span class="tag grammar">语病 ${summary.grammar}</span>`);
+            if (summary.wording > 0) parts.push(`<span class="tag wording">用词 ${summary.wording}</span>`);
+            if (summary.punctuation > 0) parts.push(`<span class="tag punctuation">标点 ${summary.punctuation}</span>`);
+            if (summary.sensitive > 0) parts.push(`<span class="tag sensitive">敏感词 ${summary.sensitive}</span>`);
+            el.innerHTML = parts.join(' ');
+        }
+
+        // ============================================
+        // 采纳单条建议
+        // ============================================
+        function acceptIssue(id) {
+            const issue = currentIssues.find(i => i.id === id);
+            if (!issue || !issue.replace_with) return;
+
+            // 保存撤销状态
+            lastTextBeforeAccept = textInput.value;
+
+            const text = textInput.value;
+            const start = issue.position.start;
+            const end = issue.position.end;
+            const newText = text.slice(0, start) + issue.replace_with + text.slice(end);
+
+            textInput.value = newText;
+            originalText = newText;
+
+            // 重新校对（用新文本更新高亮和问题列表）
+            refreshAfterEdit();
+            document.getElementById('btnUndo').disabled = false;
+        }
+
+        // ============================================
+        // 全部修正
+        // ============================================
+        function acceptAll() {
+            if (currentIssues.length === 0) return;
+
+            lastTextBeforeAccept = textInput.value;
+
+            let text = textInput.value;
+            // 从后往前替换，避免位置偏移
+            const sorted = [...currentIssues].sort((a, b) => b.position.start - a.position.start);
+
+            for (const issue of sorted) {
+                if (!issue.replace_with) continue;
+                const start = issue.position.start;
+                const end = issue.position.end;
+                text = text.slice(0, start) + issue.replace_with + text.slice(end);
+            }
+
+            textInput.value = text;
+            originalText = text;
+
+            refreshAfterEdit();
+            document.getElementById('btnUndo').disabled = false;
+        }
+
+        // ============================================
+        // 撤销
+        // ============================================
+        function undo() {
+            if (!lastTextBeforeAccept) return;
+            textInput.value = lastTextBeforeAccept;
+            originalText = lastTextBeforeAccept;
+            lastTextBeforeAccept = '';
+            refreshAfterEdit();
+            document.getElementById('btnUndo').disabled = true;
+        }
+
+        // ============================================
+        // 编辑后刷新
+        // ============================================
+        async function refreshAfterEdit() {
+            const text = textInput.value.trim();
+            if (!text) {
+                clearResults();
+                return;
+            }
+
+            try {
+                const resp = await fetch('/api/check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text }),
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    currentIssues = data.issues;
+                    renderPreview(data.issues);
+                    renderIssueList(data.issues);
+                    renderSummary(data.summary);
+                    document.getElementById('btnAcceptAll').disabled = data.issues.length === 0;
+                }
+            } catch (err) {
+                // 静默失败
+            }
+        }
+
+        // ============================================
+        // 清除结果
+        // ============================================
+        function clearResults() {
+            currentIssues = [];
+            document.getElementById('previewBox').classList.remove('show');
+            document.getElementById('previewContent').innerHTML = '';
+            document.getElementById('issueList').innerHTML = `
+                <div style="text-align:center; color:#ccc; padding:40px 0;">
+                    <div style="font-size:48px; margin-bottom:12px;">📎</div>
+                    <div>点击「一键校对」开始检查</div>
+                </div>`;
+            document.getElementById('resultSummary').innerHTML = '<span style="color:#999;">等待校对...</span>';
+            document.getElementById('btnAcceptAll').disabled = true;
+            document.getElementById('btnUndo').disabled = true;
+            document.getElementById('charCount').className = 'char-count';
+        }
+
+        // ============================================
+        // 滚动到高亮位置
+        // ============================================
+        function scrollToHighlight(id) {
+            const previewBox = document.getElementById('previewBox');
+            const issue = currentIssues.find(i => i.id === id);
+            if (!issue) return;
+
+            // 找到对应的高亮元素
+            const highlights = previewBox.querySelectorAll('.highlight');
+            if (highlights.length >= id) {
+                const target = highlights[id - 1];
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // 闪烁效果
+                target.style.outline = '2px solid #4A90D9';
+                setTimeout(() => { target.style.outline = ''; }, 1500);
+            }
+        }
+
+        // ============================================
+        // 用户反馈
+        // ============================================
+        async function sendFeedback(rating) {
+            try {
+                await fetch('/api/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        rating: rating,
+                        text_length: textInput.value.length,
+                    }),
+                });
+                const emoji = rating === 'good' ? '😊' : '😞';
+                setStatus(`${emoji} 感谢反馈！我们会继续改进`, 'success');
+            } catch (err) {
+                // 静默失败，不打扰用户
+            }
+        }
+
+        // ============================================
+        // 状态栏
+        // ============================================
+        function setStatus(msg, type) {
+            const bar = document.getElementById('statusBar');
+            const cls = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'loading' ? 'loading' : 'info';
+            bar.innerHTML = `<span class="status-msg ${cls}">${msg}</span>`;
+        }
+    </script>
+</body>
+</html>
